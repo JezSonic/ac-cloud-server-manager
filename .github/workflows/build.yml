@@ -1,0 +1,72 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.8.0'
+        cache: true
+        modules: 'qtcharts'
+        # Default empty string works for Linux/macOS. For Windows Qt 6.8+, win64_msvc2022_64 is standard
+        arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2022_64' || '' }}
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: "release"
+        cache-on-failure: true
+
+    - name: macOS Qt 6.8.0 __yield fix
+      if: matrix.os == 'macos-latest'
+      run: |
+        echo "#include <arm_acle.h>" > /tmp/qyieldcpu.h.tmp
+        cat $QT_ROOT_DIR/lib/QtCore.framework/Headers/qyieldcpu.h >> /tmp/qyieldcpu.h.tmp
+        mv /tmp/qyieldcpu.h.tmp $QT_ROOT_DIR/lib/QtCore.framework/Headers/qyieldcpu.h
+
+    - name: Build
+      run: cargo build --release --verbose
+
+    - name: Run tests
+      run: cargo test --verbose
+
+    - name: Deploy Qt DLLs (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        mkdir release_win
+        cp target/release/ac-cloud-server-manager.exe release_win/
+        windeployqt --qmldir qml release_win/ac-cloud-server-manager.exe
+
+    - name: Upload Artifacts (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ac-cloud-server-manager-${{ matrix.os }}
+        path: target/release/ac-cloud-server-manager
+
+    - name: Upload Artifacts (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ac-cloud-server-manager-${{ matrix.os }}
+        path: release_win/

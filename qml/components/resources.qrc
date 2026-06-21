@@ -1,0 +1,5 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/qt/qml/com/acmanager/qml/components">
+    <file>qmldir</file>
+</qresource>
+</RCC>
